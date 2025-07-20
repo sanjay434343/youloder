@@ -40,6 +40,7 @@ class VideoDownloadRequest(BaseModel):
     url: str
     format: Optional[str] = "best"  # best, worst, mp4, mp3, etc. or format_id
     quality: Optional[str] = "best"  # best, worst, or specific like 1080p, 720p
+    cookies_path: Optional[str] = None  # NEW: path to cookies.txt
 
 class PlaylistDownloadRequest(BaseModel):
     url: str
@@ -47,6 +48,7 @@ class PlaylistDownloadRequest(BaseModel):
     quality: Optional[str] = "best"  # best, worst, or specific quality
     start_index: Optional[int] = 1
     end_index: Optional[int] = None
+    cookies_path: Optional[str] = None  # NEW
 
 class VideoInfo(BaseModel):
     id: str
@@ -101,7 +103,7 @@ class YouTubeDownloader:
         """Check if URL is a playlist"""
         return 'playlist?list=' in url or '&list=' in url
     
-    def get_video_info(self, url: str) -> Dict[str, Any]:
+    def get_video_info(self, url: str, cookies_path: Optional[str] = None) -> Dict[str, Any]:
         """Get video information without downloading"""
         normalized_url = self.normalize_url(url)
         
@@ -110,6 +112,8 @@ class YouTubeDownloader:
             'skip_download': True,
             'listformats': True,
         }
+        if cookies_path:
+            ydl_opts['cookiefile'] = cookies_path
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
@@ -133,7 +137,7 @@ class YouTubeDownloader:
                     )
                 raise HTTPException(status_code=400, detail=f"Failed to extract video info: {error_msg}")
     
-    def download_video(self, url: str, format_selector: str = "best", quality: str = "720p") -> Dict[str, Any]:
+    def download_video(self, url: str, format_selector: str = "best", quality: str = "720p", cookies_path: Optional[str] = None) -> Dict[str, Any]:
         """Download a single video"""
         normalized_url = self.normalize_url(url)
 
@@ -183,6 +187,8 @@ class YouTubeDownloader:
             'format': format_string,
             'postprocessors': postprocessors,
         }
+        if cookies_path:
+            ydl_opts['cookiefile'] = cookies_path
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
@@ -209,7 +215,7 @@ class YouTubeDownloader:
                 raise HTTPException(status_code=400, detail=f"Download failed: {str(e)}")
     
     def download_playlist(self, url: str, format_selector: str = "best", quality: str = "best", 
-                         start_index: int = 1, end_index: Optional[int] = None) -> Dict[str, Any]:
+                         start_index: int = 1, end_index: Optional[int] = None, cookies_path: Optional[str] = None) -> Dict[str, Any]:
         """Download playlist videos"""
         normalized_url = self.normalize_url(url)
         
@@ -249,6 +255,8 @@ class YouTubeDownloader:
             'outtmpl': os.path.join(DOWNLOADS_DIR, '%(playlist)s/%(playlist_index)s - %(title)s.%(ext)s'),
             'postprocessors': postprocessors,
         }
+        if cookies_path:
+            ydl_opts['cookiefile'] = cookies_path
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
@@ -311,7 +319,7 @@ async def health_check():
 async def get_video_info(request: VideoDownloadRequest):
     """Get video information without downloading"""
     try:
-        info = downloader.get_video_info(request.url)
+        info = downloader.get_video_info(request.url, request.cookies_path)
         
         # Extract and organize available formats
         video_formats = []
@@ -392,7 +400,7 @@ async def download_video(request: VideoDownloadRequest, background_tasks: Backgr
             )
 
         # Use the format_id directly if provided
-        result = downloader.download_video(request.url, request.format, request.quality)
+        result = downloader.download_video(request.url, request.format, request.quality, request.cookies_path)
 
         filename = os.path.basename(result['file_path'])
         download_url = f"/download/{filename}"
@@ -422,7 +430,8 @@ async def download_playlist(request: PlaylistDownloadRequest, background_tasks: 
             request.format, 
             request.quality,
             request.start_index,
-            request.end_index
+            request.end_index,
+            request.cookies_path
         )
         
         return {
