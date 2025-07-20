@@ -116,7 +116,22 @@ class YouTubeDownloader:
                 info = ydl.extract_info(normalized_url, download=False)
                 return info
             except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Failed to extract video info: {str(e)}")
+                error_msg = str(e)
+                if (
+                    "Sign in to confirm you’re not a bot" in error_msg
+                    or "cookies" in error_msg.lower()
+                    or "authentication" in error_msg.lower()
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "YouTube is requiring authentication to access this video. "
+                            "This may happen if YouTube suspects automated traffic or the video is age-restricted. "
+                            "Try again later, or use yt-dlp with cookies as described at: "
+                            "https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
+                        )
+                    )
+                raise HTTPException(status_code=400, detail=f"Failed to extract video info: {error_msg}")
     
     def download_video(self, url: str, format_selector: str = "best", quality: str = "720p") -> Dict[str, Any]:
         """Download a single video"""
