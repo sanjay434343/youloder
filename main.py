@@ -68,6 +68,8 @@ class DownloadResponse(BaseModel):
     file_size: Optional[int] = None
     download_url: Optional[str] = None
 
+COOKIES_FILE_PATH = os.path.join(DOWNLOADS_DIR, "cookie.txt")  # Use your provided cookie.txt
+
 class YouTubeDownloader:
     def __init__(self):
         self.ydl_opts_base = {
@@ -75,7 +77,15 @@ class YouTubeDownloader:
             'restrictfilenames': True,
             'noplaylist': True,
         }
-    
+
+    def _resolve_cookies(self, cookies_path: Optional[str]) -> Optional[str]:
+        # Use provided cookies_path, else use default cookie.txt if it exists
+        if cookies_path:
+            return cookies_path
+        elif os.path.exists(COOKIES_FILE_PATH):
+            return COOKIES_FILE_PATH
+        return None
+
     def normalize_url(self, url: str) -> str:
         """Normalize various YouTube URL formats to standard format"""
         # Handle youtu.be short links
@@ -104,16 +114,15 @@ class YouTubeDownloader:
         return 'playlist?list=' in url or '&list=' in url
     
     def get_video_info(self, url: str, cookies_path: Optional[str] = None) -> Dict[str, Any]:
-        """Get video information without downloading"""
         normalized_url = self.normalize_url(url)
-        
         ydl_opts = {
             **self.ydl_opts_base,
             'skip_download': True,
             'listformats': True,
         }
-        if cookies_path:
-            ydl_opts['cookiefile'] = cookies_path
+        resolved_cookies = self._resolve_cookies(cookies_path)
+        if resolved_cookies:
+            ydl_opts['cookiefile'] = resolved_cookies
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
@@ -138,7 +147,6 @@ class YouTubeDownloader:
                 raise HTTPException(status_code=400, detail=f"Failed to extract video info: {error_msg}")
     
     def download_video(self, url: str, format_selector: str = "best", quality: str = "720p", cookies_path: Optional[str] = None) -> Dict[str, Any]:
-        """Download a single video"""
         normalized_url = self.normalize_url(url)
 
         # If format_selector looks like a format_id (all digits or contains dash), use it directly
@@ -187,8 +195,9 @@ class YouTubeDownloader:
             'format': format_string,
             'postprocessors': postprocessors,
         }
-        if cookies_path:
-            ydl_opts['cookiefile'] = cookies_path
+        resolved_cookies = self._resolve_cookies(cookies_path)
+        if resolved_cookies:
+            ydl_opts['cookiefile'] = resolved_cookies
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
@@ -216,7 +225,6 @@ class YouTubeDownloader:
     
     def download_playlist(self, url: str, format_selector: str = "best", quality: str = "best", 
                          start_index: int = 1, end_index: Optional[int] = None, cookies_path: Optional[str] = None) -> Dict[str, Any]:
-        """Download playlist videos"""
         normalized_url = self.normalize_url(url)
         
         playlist_indices = f"{start_index}:{end_index if end_index else ''}"
@@ -255,8 +263,9 @@ class YouTubeDownloader:
             'outtmpl': os.path.join(DOWNLOADS_DIR, '%(playlist)s/%(playlist_index)s - %(title)s.%(ext)s'),
             'postprocessors': postprocessors,
         }
-        if cookies_path:
-            ydl_opts['cookiefile'] = cookies_path
+        resolved_cookies = self._resolve_cookies(cookies_path)
+        if resolved_cookies:
+            ydl_opts['cookiefile'] = resolved_cookies
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
@@ -522,7 +531,7 @@ async def delete_file(filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
-COOKIES_FILE_PATH = os.path.join(DOWNLOADS_DIR, "cookies.txt")
+COOKIES_FILE_PATH = os.path.join(DOWNLOADS_DIR, "cookie.txt")  # Use your provided cookie.txt
 
 @app.post("/cookies/upload")
 async def upload_cookies(file: UploadFile = File(...)):
