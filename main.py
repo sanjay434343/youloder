@@ -68,18 +68,25 @@ class DownloadResponse(BaseModel):
     file_size: Optional[int] = None
     download_url: Optional[str] = None
 
-COOKIES_FILE_PATH = os.path.join(DOWNLOADS_DIR, "cookie.txt")  # Use your provided cookie.txt
+COOKIES_FILE_PATH = os.path.abspath("cookie.txt")  # Use absolute path to D:\yt downloader\cookie.txt
 
 class YouTubeDownloader:
     def __init__(self):
+        # Use a safe, short output template to avoid filename-too-long errors
         self.ydl_opts_base = {
-            'outtmpl': os.path.join(DOWNLOADS_DIR, '%(title)s.%(ext)s'),
+            'outtmpl': os.path.join(DOWNLOADS_DIR, '%(title).200B.%(ext)s'),
             'restrictfilenames': True,
             'noplaylist': True,
+            # Use cookies if available
+            **({'cookiefile': COOKIES_FILE_PATH} if os.path.exists(COOKIES_FILE_PATH) else {}),
+            # Use ffmpeg for merging, required for best quality on YouTube
+            'ffmpeg_location': 'ffmpeg',  # assumes ffmpeg is in PATH
+            # Optionally, set user-agent to match browser for better compatibility
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
 
     def _resolve_cookies(self, cookies_path: Optional[str]) -> Optional[str]:
-        # Use provided cookies_path, else use default cookie.txt if it exists
+        # Always prefer explicit cookies_path, else use the absolute cookie.txt if it exists
         if cookies_path:
             return cookies_path
         elif os.path.exists(COOKIES_FILE_PATH):
@@ -531,7 +538,7 @@ async def delete_file(filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
-COOKIES_FILE_PATH = os.path.join(DOWNLOADS_DIR, "cookie.txt")  # Use your provided cookie.txt
+COOKIES_FILE_PATH = os.path.abspath("cookie.txt")  # Use absolute path to D:\yt downloader\cookie.txt
 
 @app.post("/cookies/upload")
 async def upload_cookies(file: UploadFile = File(...)):
