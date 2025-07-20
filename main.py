@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, HttpUrl
@@ -521,6 +521,21 @@ async def delete_file(filename: str):
         return {"success": True, "message": f"File {filename} deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+COOKIES_FILE_PATH = os.path.join(DOWNLOADS_DIR, "cookies.txt")
+
+@app.post("/cookies/upload")
+async def upload_cookies(file: UploadFile = File(...)):
+    """Upload a cookies.txt file for authenticated downloads"""
+    if not file.filename.endswith(".txt"):
+        raise HTTPException(status_code=400, detail="Only .txt files are allowed for cookies.")
+    try:
+        contents = await file.read()
+        with open(COOKIES_FILE_PATH, "wb") as f:
+            f.write(contents)
+        return {"success": True, "message": "Cookies file uploaded successfully.", "cookies_path": COOKIES_FILE_PATH}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save cookies file: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(
